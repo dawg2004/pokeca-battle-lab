@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Brain,
   Cards,
@@ -190,6 +190,16 @@ export default function Home() {
   const [keyInput, setKeyInput] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+  const [keyPanelOpen, setKeyPanelOpen] = useState(false);
+  const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null);
+  const [keyNotice, setKeyNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/coach/key")
+      .then((response) => response.json() as Promise<{ configured: boolean }>)
+      .then((payload) => setKeyConfigured(payload.configured))
+      .catch(() => setKeyConfigured(null));
+  }, []);
 
   const legalActions = useMemo(() => (battle ? generateLegalActions(battle) : []), [battle]);
 
@@ -237,9 +247,37 @@ export default function Home() {
         return;
       }
       setKeyInput("");
-      await askCoachApi();
+      setKeyConfigured(true);
+      const wasWaitingForKey = coach.status === "error" && Boolean(coach.needsKey);
+      setKeyPanelOpen(false);
+      if (wasWaitingForKey) {
+        await askCoachApi();
+      } else {
+        setCoach({ status: "idle" });
+        setKeyNotice("APIキーを保存しました。");
+      }
     } catch {
       setKeyError("キーを保存できませんでした。");
+    } finally {
+      setKeyBusy(false);
+    }
+  };
+
+  const deleteCoachKey = async () => {
+    setKeyBusy(true);
+    setKeyError(null);
+    try {
+      const response = await fetch("/api/coach/key", { method: "DELETE" });
+      const payload = (await response.json()) as { ok: boolean; error?: string };
+      if (!payload.ok) {
+        setKeyError(payload.error ?? "キーを削除できませんでした。");
+        return;
+      }
+      setKeyConfigured(false);
+      setCoach({ status: "idle" });
+      setKeyNotice("APIキーを削除しました。");
+    } catch {
+      setKeyError("キーを削除できませんでした。");
     } finally {
       setKeyBusy(false);
     }
@@ -412,6 +450,18 @@ export default function Home() {
                     {coach.status === "loading" ? "考え中…" : "コーチに聞く"}
                   </button>
                   <button
+                    onClick={() => {
+                      setKeyNotice(null);
+                      setKeyError(null);
+                      setKeyPanelOpen((open) => !open);
+                    }}
+                    aria-expanded={keyPanelOpen}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm font-bold text-[var(--muted)] transition hover:border-[var(--purple)] hover:text-[var(--purple)]"
+                  >
+                    <Key size={18} weight="bold" />
+                    APIキー
+                  </button>
+                  <button
                     onClick={saveLog}
                     className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--line)] px-4 text-sm font-bold text-slate-100"
                   >
@@ -436,50 +486,82 @@ export default function Home() {
                 <Lightning className="text-[var(--blue)]" size={20} weight="duotone" />
                 <h2 className="font-semibold">Legal actions</h2>
               </div>
+              {keyNotice ? (
+                <div className="mb-3 rounded-md border border-[var(--good)]/40 bg-[rgba(95,208,155,0.1)] p-3 text-xs text-[var(--good)]">
+                  {keyNotice}
+                </div>
+              ) : null}
               {coach.status === "error" ? (
                 <div className="mb-3 rounded-md border border-[rgba(239,111,108,0.45)] bg-[rgba(239,111,108,0.1)] p-3 text-xs leading-5 text-[var(--danger)]">
                   {coach.message}
-                  {coach.needsKey ? (
-                    <div className="mt-2 space-y-2 text-[var(--muted)]">
-                      <a
-                        href="https://aistudio.google.com/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-md bg-[var(--purple)] px-3 py-1.5 font-bold text-zinc-950 transition hover:brightness-110"
-                      >
-                        <Key size={14} weight="bold" />
-                        Gemini APIキーを作る（無料枠あり）
-                      </a>
-                      <p>作ったキーをここに貼り付けて保存してください。</p>
-                      <form
-                        className="flex gap-2"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void saveCoachKey();
+                </div>
+              ) : null}
+              {keyPanelOpen || (coach.status === "error" && coach.needsKey) ? (
+                <div className="mb-3 space-y-2 rounded-md border border-[var(--purple)]/40 bg-[rgba(178,107,255,0.08)] p-3 text-xs leading-5 text-[var(--muted)]">
+                  <p className="flex items-center gap-1.5 font-bold text-[var(--purple)]">
+                    <Key size={14} weight="bold" />
+                    Gemini APIキー
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${
+                        keyConfigured ? "bg-[rgba(95,208,155,0.18)] text-[var(--good)]" : "bg-[rgba(239,111,108,0.18)] text-[var(--danger)]"
+                      }`}
+                    >
+                      {keyConfigured === null ? "確認中" : keyConfigured ? "設定済み" : "未設定"}
+                    </span>
+                  </p>
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-[var(--purple)] px-3 py-1.5 font-bold text-zinc-950 transition hover:brightness-110"
+                  >
+                    <Key size={14} weight="bold" />
+                    Gemini APIキーを作る（無料枠あり）
+                  </a>
+                  <p>{keyConfigured ? "新しいキーを貼り付けて保存すると、今のキーを置き換えます。" : "作ったキーをここに貼り付けて保存してください。"}</p>
+                  <form
+                    className="flex gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveCoachKey();
+                    }}
+                  >
+                    <input
+                      id="gemini-key"
+                      type="password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={keyInput}
+                      onChange={(event) => setKeyInput(event.target.value)}
+                      placeholder="AIza... / AQ...."
+                      className="min-h-9 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-2 font-mono text-xs text-slate-100 outline-none focus:border-[var(--purple)]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={keyBusy || keyInput.trim() === ""}
+                      className="min-h-9 rounded-md border border-[var(--purple)] px-3 font-bold text-[var(--purple)] transition hover:bg-[rgba(178,107,255,0.12)] disabled:opacity-45"
+                    >
+                      {keyBusy ? "保存中…" : keyConfigured ? "変更" : "保存"}
+                    </button>
+                  </form>
+                  {keyError ? <p className="text-[var(--danger)]">{keyError}</p> : null}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p>キーはこのPC内の <code className="font-mono">.env.local</code> にのみ保存され、画面には再表示されません。</p>
+                    {keyConfigured ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("保存済みのAPIキーを削除しますか？（Google側のキーは削除されません）")) {
+                            void deleteCoachKey();
+                          }
                         }}
+                        disabled={keyBusy}
+                        className="rounded-md border border-[var(--danger)]/60 px-2 py-1 font-bold text-[var(--danger)] transition hover:bg-[rgba(239,111,108,0.12)] disabled:opacity-45"
                       >
-                        <input
-                          id="gemini-key"
-                          type="password"
-                          autoComplete="off"
-                          spellCheck={false}
-                          value={keyInput}
-                          onChange={(event) => setKeyInput(event.target.value)}
-                          placeholder="AIza..."
-                          className="min-h-9 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-2 font-mono text-xs text-slate-100 outline-none focus:border-[var(--purple)]"
-                        />
-                        <button
-                          type="submit"
-                          disabled={keyBusy || keyInput.trim() === ""}
-                          className="min-h-9 rounded-md border border-[var(--purple)] px-3 font-bold text-[var(--purple)] transition hover:bg-[rgba(178,107,255,0.12)] disabled:opacity-45"
-                        >
-                          {keyBusy ? "保存中…" : "保存"}
-                        </button>
-                      </form>
-                      {keyError ? <p className="text-[var(--danger)]">{keyError}</p> : null}
-                      <p>キーはこのPC内の <code className="font-mono">.env.local</code> に保存され、ブラウザや画面には残りません。</p>
-                    </div>
-                  ) : null}
+                        キーを削除
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
               {coach.status === "ok" ? (
