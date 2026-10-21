@@ -6,6 +6,7 @@ import {
   Cards,
   Database,
   Flask,
+  Lightbulb,
   Lightning,
   Play,
   ShieldCheck,
@@ -18,6 +19,7 @@ import type { BattleState, LegalAction, PlayerId } from "@/lib/battle/types";
 import { resolveDeckCode, summarizeDeck } from "@/lib/deck/resolveDeck";
 import { sampleDeck } from "@/lib/deck/sampleDecks";
 import type { DeckList } from "@/lib/deck/types";
+import type { CoachAdvice } from "@/lib/coach/coach";
 
 const initialCode = "xx4cGx-D0BtE3-8cGaGK";
 
@@ -180,6 +182,10 @@ export default function Home() {
     return JSON.parse(window.localStorage.getItem("pokeca-battle-logs") ?? "[]").length;
   });
 
+  const [coach, setCoach] = useState<
+    { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "ok"; advice: CoachAdvice }
+  >({ status: "idle" });
+
   const legalActions = useMemo(() => (battle ? generateLegalActions(battle) : []), [battle]);
 
   const loadDeck = async () => {
@@ -202,11 +208,33 @@ export default function Home() {
 
   const startBattle = () => {
     const seed = Math.floor(Math.random() * 2 ** 31);
+    setCoach({ status: "idle" });
     setBattle(createInitialBattle({ playerDeck: deck, opponentDeck: sampleDeck, seed }));
   };
 
   const apply = (action: LegalAction) => {
+    setCoach({ status: "idle" });
     setBattle((current) => (current ? applyAction(current, action) : current));
+  };
+
+  const askCoachApi = async () => {
+    if (!battle || legalActions.length === 0) return;
+    setCoach({ status: "loading" });
+    try {
+      const response = await fetch("/api/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(battle)
+      });
+      const payload = (await response.json()) as { ok: boolean; advice?: CoachAdvice; error?: string };
+      setCoach(
+        payload.ok && payload.advice
+          ? { status: "ok", advice: payload.advice }
+          : { status: "error", message: payload.error ?? "AI Coach から返答がありませんでした。" }
+      );
+    } catch {
+      setCoach({ status: "error", message: "AI Coach に接続できませんでした。" });
+    }
   };
 
   const askAi = () => {
@@ -310,7 +338,10 @@ export default function Home() {
       <section key="battle" className="animate-screen-in grid gap-4 xl:grid-cols-[1fr_380px]">
           <div className="space-y-4">
             <button
-              onClick={() => setBattle(null)}
+              onClick={() => {
+                setCoach({ status: "idle" });
+                setBattle(null);
+              }}
               className="inline-flex w-fit items-center gap-2 rounded-md border border-[var(--line)] px-3 py-2 text-xs font-bold text-[var(--muted)] transition hover:border-[var(--blue)] hover:text-[var(--blue)]"
             >
               ← デッキ選択に戻る
@@ -341,6 +372,14 @@ export default function Home() {
                     AIに相談
                   </button>
                   <button
+                    onClick={askCoachApi}
+                    disabled={legalActions.length === 0 || Boolean(battle.winner) || coach.status === "loading"}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--purple)] px-4 text-sm font-bold text-[var(--purple)] transition hover:bg-[rgba(178,107,255,0.12)] disabled:opacity-45"
+                  >
+                    <Lightbulb size={18} weight="bold" />
+                    {coach.status === "loading" ? "考え中…" : "コーチに聞く"}
+                  </button>
+                  <button
                     onClick={saveLog}
                     className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--line)] px-4 text-sm font-bold text-slate-100"
                   >
@@ -365,20 +404,50 @@ export default function Home() {
                 <Lightning className="text-[var(--blue)]" size={20} weight="duotone" />
                 <h2 className="font-semibold">Legal actions</h2>
               </div>
+              {coach.status === "error" ? (
+                <div className="mb-3 rounded-md border border-[rgba(239,111,108,0.45)] bg-[rgba(239,111,108,0.1)] p-3 text-xs leading-5 text-[var(--danger)]">
+                  {coach.message}
+                </div>
+              ) : null}
+              {coach.status === "ok" ? (
+                <div className="animate-log-in mb-3 rounded-md border border-[var(--purple)]/50 bg-[rgba(178,107,255,0.1)] p-3 text-xs leading-5">
+                  <p className="mb-1 flex items-center gap-1.5 font-bold text-[var(--purple)]">
+                    <Lightbulb size={14} weight="bold" />
+                    コーチのおすすめ
+                  </p>
+                  <p>{coach.advice.reason}</p>
+                  {coach.advice.risk ? <p className="mt-1 text-[var(--muted)]">リスク: {coach.advice.risk}</p> : null}
+                </div>
+              ) : null}
               <div className="max-h-[330px] space-y-2 overflow-auto">
-                {legalActions.map((action) => (
+                {legalActions.map((action) => {
+                  const recommended = coach.status === "ok" && coach.advice.recommendedActionId === action.id;
+                  const alternative = coach.status === "ok" && coach.advice.alternativeActionId === action.id;
+                  return (
                   <button
                     key={action.id}
                     onClick={() => apply(action)}
-                    className="flex min-h-12 w-full items-center justify-between gap-3 rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-3 py-2 text-left text-sm transition hover:border-[var(--blue)] active:translate-y-px"
+                    className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-md border bg-[var(--surface-strong)] px-3 py-2 text-left text-sm transition hover:border-[var(--blue)] active:translate-y-px ${
+                      recommended
+                        ? "border-[var(--purple)] shadow-[0_0_0_1px_var(--purple)]"
+                        : alternative
+                          ? "border-[var(--purple)]/50"
+                          : "border-[var(--line)]"
+                    }`}
                   >
                     <span className="inline-flex items-center gap-2">
                       <Sword size={16} className="text-[var(--accent)]" />
                       {describeAction(action)}
+                      {recommended ? (
+                        <span className="rounded bg-[var(--purple)] px-1.5 py-0.5 text-[10px] font-bold text-zinc-950">おすすめ</span>
+                      ) : alternative ? (
+                        <span className="rounded border border-[var(--purple)]/60 px-1.5 py-0.5 text-[10px] font-bold text-[var(--purple)]">次点</span>
+                      ) : null}
                     </span>
                     <span className="font-mono text-xs text-[var(--muted)]">{actionDetail(action)}</span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
