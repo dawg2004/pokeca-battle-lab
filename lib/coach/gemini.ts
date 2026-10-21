@@ -1,6 +1,6 @@
 import { CoachError, type CoachProvider } from "./coach";
 
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
 export function isCoachConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
@@ -27,12 +27,22 @@ export const geminiProvider: CoachProvider = async (systemPrompt, userPrompt) =>
     });
 
     if (!response.ok) {
-      throw new CoachError(`Gemini APIがエラーを返しました (HTTP ${response.status})。`);
+      let detail = "";
+      try {
+        const body = (await response.json()) as { error?: { message?: string } };
+        detail = body.error?.message ? ` ${body.error.message.slice(0, 160)}` : "";
+      } catch {
+        // body was not JSON; the status code alone is reported
+      }
+      throw new CoachError(`Gemini APIがエラーを返しました (HTTP ${response.status}).${detail}`);
     }
     const payload = (await response.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
     };
-    const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = payload.candidates?.[0]?.content?.parts
+      ?.filter((part) => !part.thought && typeof part.text === "string")
+      .map((part) => part.text)
+      .join("");
     if (!text) throw new CoachError("Geminiの返答が空でした。");
     return text;
   } catch (error) {
