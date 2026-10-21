@@ -1,3 +1,4 @@
+import { describeActionJa } from "@/lib/battle/labels";
 import type { BattleCard, BattleState, LegalAction } from "@/lib/battle/types";
 
 export type CoachAction = { id: string; label: string };
@@ -34,39 +35,6 @@ function cardView(card: BattleCard | null) {
   };
 }
 
-function findCard(state: BattleState, instanceId: string): BattleCard | null {
-  for (const zone of Object.values(state.zones)) {
-    const all = [zone.active, ...zone.bench, ...zone.hand];
-    const hit = all.find((c) => c?.instanceId === instanceId);
-    if (hit) return hit;
-  }
-  return null;
-}
-
-export function labelAction(state: BattleState, action: LegalAction): string {
-  const name = (id: string) => findCard(state, id)?.name ?? "?";
-  switch (action.type) {
-    case "PLAY_BASIC":
-      return `Bench ${name(action.cardInstanceId)}`;
-    case "ATTACH_ENERGY":
-      return `Attach energy to ${name(action.targetInstanceId)}`;
-    case "EVOLVE":
-      return `Evolve ${name(action.targetInstanceId)} into ${name(action.cardInstanceId)}`;
-    case "USE_TRAINER":
-      return `Play trainer ${name(action.cardInstanceId)}`;
-    case "ATTACH_TOOL":
-      return `Attach ${name(action.cardInstanceId)} to ${name(action.targetInstanceId)}`;
-    case "USE_ABILITY":
-      return `Use ability of ${name(action.sourceInstanceId)}`;
-    case "RETREAT":
-      return `Retreat active, promote ${name(action.targetInstanceId)}`;
-    case "ATTACK":
-      return `Attack with ${action.attack.name} (${action.attack.damage} dmg)`;
-    case "END_TURN":
-      return "End turn";
-  }
-}
-
 // Only information the acting player could see: own hand by name, opponent hand as a count.
 export function summarizeForCoach(state: BattleState, actions: LegalAction[]): CoachPosition {
   const me = state.currentPlayer;
@@ -93,6 +61,6 @@ export function summarizeForCoach(state: BattleState, actions: LegalAction[]): C
       retreated: state.retreatedThisTurn[me]
     },
     recentLog: state.log.slice(0, 6).map((e) => e.message),
-    actions: actions.map((a) => ({ id: a.id, label: labelAction(state, a) }))
+    actions: actions.map((a) => ({ id: a.id, label: describeActionJa(state, a) }))
   };
 }

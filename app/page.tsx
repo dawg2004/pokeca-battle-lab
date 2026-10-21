@@ -15,7 +15,8 @@ import {
   Warning
 } from "@phosphor-icons/react";
 import { applyAction, createInitialBattle, generateLegalActions } from "@/lib/battle/engine";
-import { describeAction, heuristicDecisionEngine } from "@/lib/battle/decision";
+import { heuristicDecisionEngine } from "@/lib/battle/decision";
+import { actionTagJa, describeActionJa } from "@/lib/battle/labels";
 import type { BattleState, LegalAction, PlayerId } from "@/lib/battle/types";
 import { resolveDeckCode, summarizeDeck } from "@/lib/deck/resolveDeck";
 import { sampleDeck } from "@/lib/deck/sampleDecks";
@@ -164,12 +165,6 @@ function DeckTable({ deck }: { deck: DeckList }) {
       </div>
     </section>
   );
-}
-
-function actionDetail(action: LegalAction): string {
-  if (action.type === "ATTACK") return `${action.attack.damage} damage`;
-  if (action.type === "END_TURN") return "pass priority";
-  return action.id.split("-").slice(0, 3).join("-");
 }
 
 export default function Home() {
@@ -601,14 +596,14 @@ export default function Home() {
                   >
                     <span className="inline-flex items-center gap-2">
                       <Sword size={16} className="text-[var(--accent)]" />
-                      {describeAction(action)}
+                      {describeActionJa(battle, action)}
                       {recommended ? (
                         <span className="rounded bg-[var(--purple)] px-1.5 py-0.5 text-[10px] font-bold text-zinc-950">おすすめ</span>
                       ) : alternative ? (
                         <span className="rounded border border-[var(--purple)]/60 px-1.5 py-0.5 text-[10px] font-bold text-[var(--purple)]">次点</span>
                       ) : null}
                     </span>
-                    <span className="font-mono text-xs text-[var(--muted)]">{actionDetail(action)}</span>
+                    <span className="font-mono text-xs text-[var(--muted)]">{actionTagJa(battle, action)}</span>
                   </button>
                   );
                 })}
