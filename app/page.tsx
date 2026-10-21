@@ -187,6 +187,10 @@ export default function Home() {
     { status: "idle" } | { status: "loading" } | { status: "error"; message: string; needsKey?: boolean } | { status: "ok"; advice: CoachAdvice }
   >({ status: "idle" });
 
+  const [keyInput, setKeyInput] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+
   const legalActions = useMemo(() => (battle ? generateLegalActions(battle) : []), [battle]);
 
   const loadDeck = async () => {
@@ -216,6 +220,29 @@ export default function Home() {
   const apply = (action: LegalAction) => {
     setCoach({ status: "idle" });
     setBattle((current) => (current ? applyAction(current, action) : current));
+  };
+
+  const saveCoachKey = async () => {
+    setKeyBusy(true);
+    setKeyError(null);
+    try {
+      const response = await fetch("/api/coach/key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: keyInput })
+      });
+      const payload = (await response.json()) as { ok: boolean; error?: string };
+      if (!payload.ok) {
+        setKeyError(payload.error ?? "キーを保存できませんでした。");
+        return;
+      }
+      setKeyInput("");
+      await askCoachApi();
+    } catch {
+      setKeyError("キーを保存できませんでした。");
+    } finally {
+      setKeyBusy(false);
+    }
   };
 
   const askCoachApi = async () => {
@@ -334,7 +361,7 @@ export default function Home() {
             className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[var(--accent)] px-4 text-sm font-bold text-[var(--accent)] transition hover:bg-[rgba(245,200,75,0.1)] active:translate-y-px"
           >
             <Play size={18} weight="bold" />
-            BATTLE START
+            バトル準備
           </button>
         </div>
         <DeckTable deck={deck} />
@@ -423,11 +450,34 @@ export default function Home() {
                         <Key size={14} weight="bold" />
                         Gemini APIキーを作る（無料枠あり）
                       </a>
-                      <p>
-                        作ったキーは <code className="font-mono">~/pokeka/.env.local</code> に{" "}
-                        <code className="font-mono">GEMINI_API_KEY=キー</code> と書き、開発サーバーを再起動してください。
-                        キーはここに貼らないでください。
-                      </p>
+                      <p>作ったキーをここに貼り付けて保存してください。</p>
+                      <form
+                        className="flex gap-2"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void saveCoachKey();
+                        }}
+                      >
+                        <input
+                          id="gemini-key"
+                          type="password"
+                          autoComplete="off"
+                          spellCheck={false}
+                          value={keyInput}
+                          onChange={(event) => setKeyInput(event.target.value)}
+                          placeholder="AIza..."
+                          className="min-h-9 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-2 font-mono text-xs text-slate-100 outline-none focus:border-[var(--purple)]"
+                        />
+                        <button
+                          type="submit"
+                          disabled={keyBusy || keyInput.trim() === ""}
+                          className="min-h-9 rounded-md border border-[var(--purple)] px-3 font-bold text-[var(--purple)] transition hover:bg-[rgba(178,107,255,0.12)] disabled:opacity-45"
+                        >
+                          {keyBusy ? "保存中…" : "保存"}
+                        </button>
+                      </form>
+                      {keyError ? <p className="text-[var(--danger)]">{keyError}</p> : null}
+                      <p>キーはこのPC内の <code className="font-mono">.env.local</code> に保存され、ブラウザや画面には残りません。</p>
                     </div>
                   ) : null}
                 </div>

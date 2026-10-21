@@ -9,7 +9,7 @@ const deckCodePattern = /^[A-Za-z0-9]{6}-[A-Za-z0-9]{6}-[A-Za-z0-9]{6}$/;
 // variables are set automatically by well-known public hosting platforms, never on a
 // developer's own machine, so they are a reliable signal that this code is no longer
 // running as personal local software.
-function isKnownPublicHostingEnvironment(): boolean {
+export function isKnownPublicHostingEnvironment(): boolean {
   return Boolean(
     process.env.VERCEL ||
       process.env.NETLIFY ||
