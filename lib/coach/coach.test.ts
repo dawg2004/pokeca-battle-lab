@@ -55,4 +55,17 @@ describe("AI coach", () => {
     const { position } = setup();
     await expect(askCoach(position, async () => "not json")).rejects.toBeInstanceOf(CoachError);
   });
+
+  it("gives the coach the engine's real effect text for trainers and abilities instead of letting it guess", () => {
+    const state = createInitialBattle({ playerDeck: sampleDeck, opponentDeck: sampleDeck, seed: 7 });
+    const zone = state.zones.player;
+    const notes = zone.deck.find((c) => c.name === "Research Notes")!;
+    const scout = zone.deck.find((c) => c.name === "Lab Scout")!;
+    zone.hand = [notes];
+    zone.active = { ...scout, instanceId: "scout-active" };
+
+    const position = summarizeForCoach(state, generateLegalActions(state));
+    expect(position.yourHand).toEqual(["Research Notes（サポート: 山札を2枚引く）"]);
+    expect(JSON.stringify(position.yourActive)).toContain("山札を1枚引く");
+  });
 });

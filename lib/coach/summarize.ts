@@ -1,3 +1,4 @@
+import { describeAbilityEffect, describeTrainerEffect } from "@/lib/battle/effects";
 import { describeActionJa } from "@/lib/battle/labels";
 import type { BattleCard, BattleState, LegalAction } from "@/lib/battle/types";
 
@@ -29,10 +30,19 @@ function cardView(card: BattleCard | null) {
     damage: card.damage,
     energy: card.attachedEnergy,
     tool: card.tool?.name ?? null,
-    ability: card.ability?.name ?? null,
+    ability: card.ability ? `${card.ability.name}（${describeAbilityEffect(card.ability.effect)}）` : null,
     retreatCost: card.retreatCost ?? 0,
     attacks: (card.attacks ?? []).map((a) => `${a.name} (cost ${a.cost}, ${a.damage} dmg)`)
   };
+}
+
+function handEntry(card: BattleCard): string {
+  if (card.category === "energy") return `${card.name}（エネルギー）`;
+  if (card.category === "trainer") {
+    const kind = { supporter: "サポート", item: "グッズ", stadium: "スタジアム", tool: "どうぐ" }[card.trainerKind ?? "item"];
+    return `${card.name}（${kind}: ${describeTrainerEffect(card)}）`;
+  }
+  return card.evolvesFrom ? `${card.name}（${card.evolvesFrom}から進化）` : `${card.name}（たね）`;
 }
 
 // Only information the acting player could see: own hand by name, opponent hand as a count.
@@ -47,7 +57,7 @@ export function summarizeForCoach(state: BattleState, actions: LegalAction[]): C
     you: me,
     yourActive: cardView(mine.active),
     yourBench: mine.bench.map(cardView),
-    yourHand: mine.hand.map((c) => c.name),
+    yourHand: mine.hand.map(handEntry),
     yourDeckCount: mine.deck.length,
     yourPrizesTaken: mine.prizeTaken,
     opponentActive: cardView(theirs.active),

@@ -15,16 +15,24 @@ export const geminiProvider: CoachProvider = async (systemPrompt, userPrompt) =>
   const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.3 }
-      })
-    });
+    const request = () =>
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+        })
+      });
+
+    // 429/503 are usually momentary ("high demand"); retry a couple of times before giving up.
+    let response = await request();
+    for (let attempt = 1; attempt <= 2 && (response.status === 429 || response.status === 503); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+      response = await request();
+    }
 
     if (!response.ok) {
       let detail = "";
