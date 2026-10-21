@@ -8,7 +8,7 @@ import { summarizeForCoach } from "@/lib/coach/summarize";
 export async function POST(request: Request) {
   if (!isCoachConfigured()) {
     return NextResponse.json(
-      { ok: false, error: "AI Coach は未設定です。.env.local に GEMINI_API_KEY を設定してください。" },
+      { ok: false, code: "NO_KEY", error: "AI Coach は未設定です。.env.local に GEMINI_API_KEY を設定してください。" },
       { status: 200 }
     );
   }

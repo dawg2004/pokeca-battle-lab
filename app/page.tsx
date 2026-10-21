@@ -6,6 +6,7 @@ import {
   Cards,
   Database,
   Flask,
+  Key,
   Lightbulb,
   Lightning,
   Play,
@@ -183,7 +184,7 @@ export default function Home() {
   });
 
   const [coach, setCoach] = useState<
-    { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "ok"; advice: CoachAdvice }
+    { status: "idle" } | { status: "loading" } | { status: "error"; message: string; needsKey?: boolean } | { status: "ok"; advice: CoachAdvice }
   >({ status: "idle" });
 
   const legalActions = useMemo(() => (battle ? generateLegalActions(battle) : []), [battle]);
@@ -226,11 +227,15 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(battle)
       });
-      const payload = (await response.json()) as { ok: boolean; advice?: CoachAdvice; error?: string };
+      const payload = (await response.json()) as { ok: boolean; advice?: CoachAdvice; error?: string; code?: string };
       setCoach(
         payload.ok && payload.advice
           ? { status: "ok", advice: payload.advice }
-          : { status: "error", message: payload.error ?? "AI Coach から返答がありませんでした。" }
+          : {
+              status: "error",
+              message: payload.error ?? "AI Coach から返答がありませんでした。",
+              needsKey: payload.code === "NO_KEY"
+            }
       );
     } catch {
       setCoach({ status: "error", message: "AI Coach に接続できませんでした。" });
@@ -407,6 +412,24 @@ export default function Home() {
               {coach.status === "error" ? (
                 <div className="mb-3 rounded-md border border-[rgba(239,111,108,0.45)] bg-[rgba(239,111,108,0.1)] p-3 text-xs leading-5 text-[var(--danger)]">
                   {coach.message}
+                  {coach.needsKey ? (
+                    <div className="mt-2 space-y-2 text-[var(--muted)]">
+                      <a
+                        href="https://aistudio.google.com/apikey"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-[var(--purple)] px-3 py-1.5 font-bold text-zinc-950 transition hover:brightness-110"
+                      >
+                        <Key size={14} weight="bold" />
+                        Gemini APIキーを作る（無料枠あり）
+                      </a>
+                      <p>
+                        作ったキーは <code className="font-mono">~/pokeka/.env.local</code> に{" "}
+                        <code className="font-mono">GEMINI_API_KEY=キー</code> と書き、開発サーバーを再起動してください。
+                        キーはここに貼らないでください。
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {coach.status === "ok" ? (
