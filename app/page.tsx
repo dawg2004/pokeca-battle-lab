@@ -598,12 +598,12 @@ export default function Home() {
                       <Sword size={16} className="text-[var(--accent)]" />
                       {describeActionJa(battle, action)}
                       {recommended ? (
-                        <span className="rounded bg-[var(--purple)] px-1.5 py-0.5 text-[10px] font-bold text-zinc-950">おすすめ</span>
+                        <span className="shrink-0 whitespace-nowrap rounded bg-[var(--purple)] px-1.5 py-0.5 text-[10px] font-bold text-zinc-950">おすすめ</span>
                       ) : alternative ? (
-                        <span className="rounded border border-[var(--purple)]/60 px-1.5 py-0.5 text-[10px] font-bold text-[var(--purple)]">次点</span>
+                        <span className="shrink-0 whitespace-nowrap rounded border border-[var(--purple)]/60 px-1.5 py-0.5 text-[10px] font-bold text-[var(--purple)]">次点</span>
                       ) : null}
                     </span>
-                    <span className="font-mono text-xs text-[var(--muted)]">{actionTagJa(battle, action)}</span>
+                    <span className="shrink-0 whitespace-nowrap font-mono text-xs text-[var(--muted)]">{actionTagJa(battle, action)}</span>
                   </button>
                   );
                 })}

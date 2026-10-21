@@ -8,11 +8,25 @@ function findCard(state: BattleState, instanceId: string): BattleCard | null {
   return null;
 }
 
+// Name of a card, with its position appended when the same player has another in-play card of the same name.
+function nameWithSlot(state: BattleState, instanceId: string): string {
+  for (const zone of Object.values(state.zones)) {
+    const inPlay = [zone.active, ...zone.bench];
+    const index = inPlay.findIndex((card) => card?.instanceId === instanceId);
+    if (index < 0) continue;
+    const card = inPlay[index] as BattleCard;
+    const duplicated = inPlay.filter((other) => other?.name === card.name).length > 1;
+    if (!duplicated) return card.name;
+    return `${card.name}（${index === 0 ? "バトル場" : `ベンチ${index}`}）`;
+  }
+  return findCard(state, instanceId)?.name ?? "?";
+}
+
 const trainerKindLabel = { supporter: "サポート", item: "グッズ", stadium: "スタジアム", tool: "どうぐ" } as const;
 
 // Human-readable Japanese label that names the cards involved, so identical action types are distinguishable.
 export function describeActionJa(state: BattleState, action: LegalAction): string {
-  const name = (id: string) => findCard(state, id)?.name ?? "?";
+  const name = (id: string) => nameWithSlot(state, id);
 
   switch (action.type) {
     case "PLAY_BASIC":
@@ -27,7 +41,7 @@ export function describeActionJa(state: BattleState, action: LegalAction): strin
       return `${name(action.targetInstanceId)}に${name(action.cardInstanceId)}を付ける`;
     case "USE_ABILITY": {
       const source = findCard(state, action.sourceInstanceId);
-      return `${source?.name ?? "?"}の特性「${source?.ability?.name ?? "?"}」を使う`;
+      return `${name(action.sourceInstanceId)}の特性「${source?.ability?.name ?? "?"}」を使う`;
     }
     case "RETREAT": {
       const active = state.zones[action.player].active;

@@ -35,4 +35,26 @@ describe("action labels", () => {
     }
     throw new Error("no seed produced attachments to two differently named Pokemon");
   });
+
+  it("adds the board position only when the same Pokemon appears more than once", () => {
+    const state = createInitialBattle({ playerDeck: sampleDeck, opponentDeck: sampleDeck, seed: 3 });
+    const zone = state.zones.player;
+    const active = zone.active!;
+    zone.bench = [{ ...active, instanceId: "dup-1" }, { ...active, instanceId: "dup-2" }];
+
+    const labelFor = (target: string) =>
+      describeActionJa(state, {
+        id: `retreat-${target}`,
+        type: "RETREAT",
+        player: "player",
+        targetInstanceId: target
+      });
+
+    expect(labelFor("dup-1")).toContain("ベンチ1");
+    expect(labelFor("dup-2")).toContain("ベンチ2");
+    expect(labelFor("dup-1")).not.toBe(labelFor("dup-2"));
+
+    zone.bench = [{ ...active, instanceId: "solo", name: "Unique Mon" }];
+    expect(labelFor("solo")).not.toContain("ベンチ");
+  });
 });
