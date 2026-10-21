@@ -36,6 +36,10 @@ describe("coach key store", () => {
 
   it("rejects malformed keys, including ones that could inject extra env lines", async () => {
     expect(isValidKeyFormat("short")).toBe(false);
+    expect(isValidKeyFormat("AQ.Ab8RN6KRYt3N1ZIdmEPoDJoae_rHD3DWhqEL3iB7FPtaBvJ2Dxx")).toBe(true);
+    expect(isValidKeyFormat("AIzaSyTESTTESTTESTTESTTESTTEST12")).toBe(true);
+    expect(isValidKeyFormat("abcdefghijklmnopqrstuvwxyz # comment")).toBe(false);
+    expect(isValidKeyFormat('abcdefghijklmnopqrstuvwxyz"x')).toBe(false);
     expect(isValidKeyFormat(`${KEY}\nOTHER=1`)).toBe(false);
     await expect(saveCoachKey("bad key with spaces and more than twenty chars", dir)).rejects.toThrow();
   });

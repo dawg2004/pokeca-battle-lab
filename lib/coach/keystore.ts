@@ -2,7 +2,8 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const KEY_NAME = "GEMINI_API_KEY";
-const KEY_PATTERN = /^[A-Za-z0-9_-]{20,128}$/;
+// Google issues both `AIza...` and newer dotted `AQ.xxx` keys. No whitespace, quotes or `#`, so nothing can leak into other env lines.
+const KEY_PATTERN = /^[A-Za-z0-9._-]{20,256}$/;
 
 export function isValidKeyFormat(key: string): boolean {
   return KEY_PATTERN.test(key);
