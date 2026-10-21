@@ -3,6 +3,7 @@ import { clearCoachKey, isValidKeyFormat, saveCoachKey } from "@/lib/coach/keyst
 import { isCoachConfigured } from "@/lib/coach/gemini";
 import { isKnownPublicHostingEnvironment } from "@/lib/deck/officialFetch";
 
+const PREVIEW_LENGTH = 10;
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 // The key file is only writable from this machine, by this app's own pages.
@@ -25,8 +26,15 @@ function guard(request: Request): NextResponse | null {
   return null;
 }
 
-export async function GET() {
-  return NextResponse.json({ configured: isCoachConfigured() });
+// Only the first characters of the key are ever returned, and only to localhost.
+function previewOf(): string | null {
+  const key = process.env.GEMINI_API_KEY;
+  return key ? key.slice(0, PREVIEW_LENGTH) : null;
+}
+
+export async function GET(request: Request) {
+  const configured = isCoachConfigured();
+  return NextResponse.json({ configured, prefix: configured && !guard(request) ? previewOf() : null });
 }
 
 export async function POST(request: Request) {
@@ -46,7 +54,7 @@ export async function POST(request: Request) {
 
   try {
     await saveCoachKey(key);
-    return NextResponse.json({ ok: true, configured: true });
+    return NextResponse.json({ ok: true, configured: true, prefix: previewOf() });
   } catch {
     return NextResponse.json({ ok: false, error: "キーを保存できませんでした。" }, { status: 500 });
   }

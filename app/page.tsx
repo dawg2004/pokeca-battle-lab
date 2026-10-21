@@ -192,12 +192,16 @@ export default function Home() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keyPanelOpen, setKeyPanelOpen] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null);
+  const [keyPrefix, setKeyPrefix] = useState<string | null>(null);
   const [keyNotice, setKeyNotice] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/coach/key")
-      .then((response) => response.json() as Promise<{ configured: boolean }>)
-      .then((payload) => setKeyConfigured(payload.configured))
+      .then((response) => response.json() as Promise<{ configured: boolean; prefix?: string | null }>)
+      .then((payload) => {
+        setKeyConfigured(payload.configured);
+        setKeyPrefix(payload.prefix ?? null);
+      })
       .catch(() => setKeyConfigured(null));
   }, []);
 
@@ -241,13 +245,14 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: keyInput })
       });
-      const payload = (await response.json()) as { ok: boolean; error?: string };
+      const payload = (await response.json()) as { ok: boolean; error?: string; prefix?: string | null };
       if (!payload.ok) {
         setKeyError(payload.error ?? "キーを保存できませんでした。");
         return;
       }
       setKeyInput("");
       setKeyConfigured(true);
+      setKeyPrefix(payload.prefix ?? null);
       const wasWaitingForKey = coach.status === "error" && Boolean(coach.needsKey);
       setKeyPanelOpen(false);
       if (wasWaitingForKey) {
@@ -274,6 +279,7 @@ export default function Home() {
         return;
       }
       setKeyConfigured(false);
+      setKeyPrefix(null);
       setCoach({ status: "idle" });
       setKeyNotice("APIキーを削除しました。");
     } catch {
@@ -508,6 +514,9 @@ export default function Home() {
                     >
                       {keyConfigured === null ? "確認中" : keyConfigured ? "設定済み" : "未設定"}
                     </span>
+                    {keyConfigured && keyPrefix ? (
+                      <code className="font-mono text-[11px] font-normal text-[var(--muted)]">{keyPrefix}…</code>
+                    ) : null}
                   </p>
                   <a
                     href="https://aistudio.google.com/apikey"
@@ -546,7 +555,7 @@ export default function Home() {
                   </form>
                   {keyError ? <p className="text-[var(--danger)]">{keyError}</p> : null}
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p>キーはこのPC内の <code className="font-mono">.env.local</code> にのみ保存され、画面には再表示されません。</p>
+                    <p>キーはこのPC内の <code className="font-mono">.env.local</code> に保存されます。画面に出すのは先頭10文字だけで、全体は再表示されません。</p>
                     {keyConfigured ? (
                       <button
                         type="button"
