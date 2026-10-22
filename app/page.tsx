@@ -22,6 +22,7 @@ import { resolveDeckCode, summarizeDeck } from "@/lib/deck/resolveDeck";
 import { sampleDeck } from "@/lib/deck/sampleDecks";
 import type { DeckList } from "@/lib/deck/types";
 import type { CoachAdvice } from "@/lib/coach/coach";
+import type { DeckCoverage } from "@/lib/cards/types";
 
 const initialCode = "xx4cGx-D0BtE3-8cGaGK";
 
@@ -163,6 +164,110 @@ function DeckTable({ deck }: { deck: DeckList }) {
         ))}
       </div>
       </div>
+    </section>
+  );
+}
+
+function CoveragePanel({ deck }: { deck: DeckList }) {
+  const [state, setState] = useState<
+    { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "ok"; coverage: DeckCoverage }
+  >({ status: "idle" });
+
+  const run = async () => {
+    setState({ status: "loading" });
+    try {
+      const response = await fetch("/api/cards/coverage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(deck)
+      });
+      const payload = (await response.json()) as { ok: boolean; coverage?: DeckCoverage; error?: string };
+      setState(
+        payload.ok && payload.coverage
+          ? { status: "ok", coverage: payload.coverage }
+          : { status: "error", message: payload.error ?? "対応度を取得できませんでした。" }
+      );
+    } catch {
+      setState({ status: "error", message: "対応度を取得できませんでした。" });
+    }
+  };
+
+  const c = state.status === "ok" ? state.coverage : null;
+  const pct = (n: number) => (c && c.total > 0 ? `${(n / c.total) * 100}%` : "0%");
+
+  return (
+    <section className="rounded-lg border border-[var(--line)] border-t-[3px] border-t-[var(--purple)] bg-[rgba(23,25,29,0.78)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">実カード対応度</h2>
+          <p className="mt-1 max-w-[62ch] text-xs leading-5 text-[var(--muted)]">
+            このデッキの各カードを、実際のカードデータと照らして、いまのエンジンでどこまで正確に再現できるかを調べます（TCGdexから取得し、このPC内にキャッシュ）。バトルにはまだ反映されず、HPなどは仮の値のままです。
+          </p>
+        </div>
+        <button
+          onClick={run}
+          disabled={state.status === "loading"}
+          className="min-h-10 rounded-md border border-[var(--purple)] px-4 text-sm font-bold text-[var(--purple)] transition hover:bg-[rgba(178,107,255,0.12)] disabled:opacity-45"
+        >
+          {state.status === "loading" ? "調べています…" : c ? "もう一度調べる" : "対応度を調べる"}
+        </button>
+      </div>
+
+      {state.status === "error" ? (
+        <p className="mt-3 rounded-md border border-[rgba(239,111,108,0.45)] bg-[rgba(239,111,108,0.1)] p-3 text-xs text-[var(--danger)]">{state.message}</p>
+      ) : null}
+
+      {c ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-black/40">
+            <div style={{ width: pct(c.supported), backgroundColor: "var(--good)" }} />
+            <div style={{ width: pct(c.withGaps), backgroundColor: "var(--accent)" }} />
+            <div style={{ width: pct(c.unresolved), backgroundColor: "var(--danger)" }} />
+          </div>
+          <div className="grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-4">
+            <span className="rounded-md border border-[var(--good)]/40 px-3 py-2 text-[var(--good)]">再現できる {c.supported}枚</span>
+            <span className="rounded-md border border-[var(--accent)]/40 px-3 py-2 text-[var(--accent)]">要対応 {c.withGaps}枚</span>
+            <span className="rounded-md border border-[var(--line)] px-3 py-2">効果の実装待ち {c.effectGapCopies}枚</span>
+            <span className="rounded-md border border-[var(--line)] px-3 py-2">エンジン未対応 {c.engineGapCopies}枚</span>
+          </div>
+          {c.unresolved > 0 ? <p className="text-xs text-[var(--danger)]">データが見つからなかったカード: {c.unresolved}枚</p> : null}
+          <details className="rounded-md border border-[var(--line)]">
+            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">カードごとの内訳</summary>
+            <div className="max-h-[320px] divide-y divide-[var(--line)] overflow-auto">
+              {c.cards.map((card) => (
+                <div key={`${card.name}-${card.tcgdexId ?? "none"}`} className="px-3 py-2 text-sm">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      {card.name} <span className="font-mono text-xs text-[var(--accent)]">x{card.count}</span>
+                    </span>
+                    <span className="font-mono text-[11px] text-[var(--muted)]">
+                      {card.tcgdexId ?? "未解決"}
+                      {card.facts ? ` · HP${card.facts.hp ?? "?"} · にげる${card.facts.retreat ?? "?"}` : ""}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {card.status === "supported" ? <span className="rounded border border-[var(--good)]/50 px-1.5 py-0.5 text-[11px] text-[var(--good)]">再現できる</span> : null}
+                    {card.gaps.map((gap) => (
+                      <span
+                        key={gap.label}
+                        className={`rounded border px-1.5 py-0.5 text-[11px] ${
+                          gap.kind === "effect" ? "border-[var(--purple)]/50 text-[var(--purple)]" : "border-[var(--danger)]/50 text-[var(--danger)]"
+                        }`}
+                      >
+                        {gap.label}
+                      </span>
+                    ))}
+                    {card.ambiguousPrint ? <span className="rounded border border-[var(--line)] px-1.5 py-0.5 text-[11px] text-[var(--muted)]">版が複数あり1つを選択</span> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+          <p className="text-[11px] leading-5 text-[var(--muted)]">
+            紫=カード効果の実装待ち（効果文を1枚ずつ確認して実装します）／赤=エンジンが未対応の仕組み。データの二次配布はしません。
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -403,7 +508,10 @@ export default function Home() {
             バトル準備
           </button>
         </div>
-        <DeckTable deck={deck} />
+        <div className="space-y-4">
+          <DeckTable deck={deck} />
+          {deck.source === "official-site-experimental" ? <CoveragePanel key={deck.code} deck={deck} /> : null}
+        </div>
       </section>
       ) : (
       <section key="battle" className="animate-screen-in grid gap-4 xl:grid-cols-[1fr_380px]">
